@@ -1,0 +1,29 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "acbb7bb09de27320bc9112e54ad792d0"
+name = "React App"
+handle = "react-app-92"
+application_url = "https://lowest-architectural-highlight-entities.trycloudflare.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "neon-customizer-dropshipping-app.myshopify.com"
+include_config_on_deploy = true
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_content,read_products,write_content,write_products"
+
+[auth]
+redirect_urls = [
+  "https://lowest-architectural-highlight-entities.trycloudflare.com/auth/callback",
+  "https://lowest-architectural-highlight-entities.trycloudflare.com/auth/shopify/callback",
+  "https://lowest-architectural-highlight-entities.trycloudflare.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-01"
+
+[pos]
+embedded = false
