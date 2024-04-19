@@ -7,76 +7,84 @@ use App\Models\Filter;
 use App\Models\FilterValue;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Shopify\Clients\Rest;
 
 class FilterController extends Controller
 {
-    public function index(Request $request){
+    public function index(Request $request)
+    {
         $shop = getShop($request->get('shopifySession'));
+        if (!$shop) {
+            return response()->json(['error' => 'Shop not found'], 404);
+        }
+
         try {
-            if ($shop) {
-                $filters=Filter::query();
-                if($request->status==0) {
+            $filters = Filter::query();
 
-                }else if($request->status==1){
-                    $filters = $filters->where('status',1);
-                }else if($request->status==2){
-                    $filters = $filters->where('status',0);
+            if (isset($request->status)) {
+                if ($request->status == 1) {
+                    $filters->where('status', 1);
+                } elseif ($request->status == 2) {
+                    $filters->where('status', 0);
                 }
-
-                $filters=$filters->with('FilterValues')->where('shop_id',$shop->id)->orderBy('id', 'Desc')->paginate(20);
-                return response()->json($filters);
             }
-        }catch (\Exception $exception){
 
+            $filters = $filters->with('FilterValues')
+                            ->where('shop_id', $shop->id)
+                            ->orderBy('id', 'desc')
+                            ->paginate(20);
+
+            return response()->json($filters);
+        } catch (\Exception $exception) {
+            return response()->json(['error' => $exception->getMessage()], 500);
         }
     }
 
-    public function SaveFilter(Request $request){
+    public function SaveFilter(Request $request)
+    {
         $shop = getShop($request->get('shopifySession'));
+        if (!$shop) {
+            return response()->json(['success' => false, 'message' => 'Shop not found'], 404);
+        }
 
         try {
-            if($shop) {
-                if($request->filter_id){
-                    $filter=Filter::find($request->filter_id);
-                    FilterValue::where('filter_id',$filter->id)->delete();
-                }else{
-                    $filter=new Filter();
-                }
+            DB::beginTransaction();
 
-                $filter->label=$request->label;
-                $filter->status=$request->status;
-                $filter->shop_id=$shop->id;
-                $filter->save();
-
-                if($request->values){
-
-                    $values=explode(',',$request->values);
-                    foreach ($values as $value){
-                        $filter_value=new FilterValue();
-                        $filter_value->filter_id=$filter->id;
-                        $filter_value->value=$value;
-                        $filter_value->save();
-                    }
-
-                }
-
-                $this->CreateUpdateMetafield($shop);
-                $data = [
-                    'success'=>true,
-                    'message' => 'Filter Saved Successfully',
-                    'data' => $filter
-                ];
+            $filter = Filter::find($request->filter_id) ?? new Filter();
+            if ($request->has('filter_id')) {
+                FilterValue::where('filter_id', $filter->id)->delete();
             }
-        }catch (\Exception $exception){
-            $data=[
-                'success'=>false,
+
+            $filter->fill([
+                'label' => $request->label,
+                'status' => $request->status,
+                'shop_id' => $shop->id
+            ]);
+            $filter->save();
+
+            if ($request->values) {
+                $values = explode(',', $request->values);
+                foreach ($values as $value) {
+                    $filter->filterValues()->create(['value' => $value]); // Using relationship to save data in FilterValue
+                }
+            }
+
+            $this->CreateUpdateMetafield($shop);
+            DB::commit();  // Commit the transaction
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Filter Saved Successfully',
+                'data' => $filter
+            ]);
+        } catch (\Exception $exception) {
+            DB::rollback();  // Roll back the transaction
+            return response()->json([
+                'success' => false,
                 'message' => $exception->getMessage(),
-
-            ];
+            ]);
         }
-        return response()->json($data);
-
     }
 
     public function EditFilter(Request $request){
@@ -98,68 +106,66 @@ class FilterController extends Controller
         return response()->json($data);
     }
 
-    public function UpdateFilterStatus(Request $request){
+    public function UpdateFilterStatus(Request $request)
+    {
         $shop = getShop($request->get('shopifySession'));
-        try {
-            if ($shop) {
-                $filter=Filter::find($request->filter_id);
-                if($filter){
-                    $filter->status=$request->status;
-                    $filter->save();
-                    $data = [
-                        'success'=>true,
-                        'message' => 'Filter status updated successfully',
-                        'data' => $filter
-                    ];
-                }else{
-                    $data = [
-                        'success'=>false,
-                        'message' => 'Filter Not Found',
-
-                    ];
-                }
-                $this->CreateUpdateMetafield($shop);
-
-            }
-        }catch (\Exception $exception){
-            $data=[
-                'success'=>false,
-                'message' => $exception->getMessage(),
-
-            ];
+        if (!$shop) {
+            return response()->json(['success' => false, 'message' => 'Shop not found'], 404);
         }
-        return response()->json($data);
+
+        $filter = Filter::find($request->filter_id);
+        if (!$filter) {
+            return response()->json(['success' => false, 'message' => 'Filter not found'], 404);
+        }
+
+        try {
+            $filter->status = $request->status;
+            $filter->save();
+
+            $this->CreateUpdateMetafield($shop);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Filter status updated successfully',
+                'data' => $filter
+            ]);
+        } catch (\Exception $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage()
+            ], 500);
+        }
     }
 
-    public function DeleteFilter(Request $request){
+    public function DeleteFilter(Request $request)
+    {
         $shop = getShop($request->get('shopifySession'));
-        try {
-            if ($shop) {
-                $filter=Filter::find($request->filter_id);
-                if($filter){
-                    FilterValue::where('filter_id',$filter->id)->delete();
-                    $filter->delete();
-
-                    $data = [
-                        'success'=>true,
-                        'message' => 'Filter deleted successfully',
-                    ];
-                }else{
-                    $data = [
-                        'success'=>false,
-                        'message' => 'Filter Not Found',
-                    ];
-                }
-                $this->CreateUpdateMetafield($shop);
-            }
-        }catch (\Exception $exception){
-            $data=[
-                'success'=>false,
-                'message' => $exception->getMessage(),
-
-            ];
+        if (!$shop) {
+            return response()->json(['success' => false, 'message' => 'Shop not found'], 404);
         }
-        return response()->json($data);
+
+        $filter = Filter::find($request->filter_id);
+        if (!$filter) {
+            return response()->json(['success' => false, 'message' => 'Filter not found'], 404);
+        }
+
+        try {
+            DB::transaction(function () use ($filter, $shop) {
+                FilterValue::where('filter_id', $filter->id)->delete();
+                $filter->delete();
+                $this->CreateUpdateMetafield($shop);
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Filter deleted successfully'
+            ]);
+        } catch (\Exception $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage()
+            ], 500);
+        }
     }
 
     public function CreateUpdateMetafield($session)

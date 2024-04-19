@@ -2,18 +2,9 @@
 
 function getShop($session)
 {
-
-    $shop = null;
-    if ($session) {
-        $shop = \App\Models\Session::where('shop', $session->getShop())->first();
-    }
-   
-    if ($shop == null) {
-        $shop = \App\Models\Session::first();
-        // dd($shop);
-    }
-   
-    return $shop;
+    return $session
+    ? \App\Models\Session::where('shop',$session->getShop())->first()
+    : \App\Models\Session::first();
 }
 function getClient($session)
 {

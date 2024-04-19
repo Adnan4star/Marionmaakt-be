@@ -10,17 +10,16 @@ use Shopify\Clients\Rest;
 
 class ProductController extends Controller
 {
-    public function ProductsSync(Request $request){
-        // dd($request->all());
+    public function ProductsSync(Request $request)
+    {
         $shop = getShop($request->get('shopifySession'));
-        // dd($shop);
         $this->syncProducts($shop);
     }
+    
     public function syncProducts($session, $nextPage = null)
     {
-        // dd($session);
         $client = new Rest($session->shop, $session->access_token);
-        $result = $client->get('products',[],[
+        $result = $client->get('products', [], [
             'limit' => 250,
             'page_info' => $nextPage,
         ]);
@@ -29,13 +28,12 @@ class ProductController extends Controller
         foreach ($products as $product) {
             $this->createUpdateProduct($product, $session);
         }
-        if (isset($result)) {
-            if ($result->getPageInfo() ? true : false) {
-                $nextUrl = $result->getPageInfo()->getNextPageUrl();
-                if (isset($nextUrl)) {
-                    $arr = explode('page_info=', $result->getPageInfo()->getNextPageUrl());
-                    $this->syncProducts($session,$arr[count($arr) - 1]);
-                }
+        
+        if (isset($result) && ($nextPageInfo = $result->getPageInfo()) && $nextPageInfo->hasNextPage()) {
+            $nextUrl = $nextPageInfo->getNextPageUrl();
+            if ($nextUrl) {
+                $arr = explode('page_info=', $nextUrl);
+                $this->syncProducts($session, $arr[count($arr) - 1]);
             }
         }
     }
@@ -43,70 +41,67 @@ class ProductController extends Controller
     public function createUpdateProduct($product, $shop)
     {
         $product = json_decode(json_encode($product), false);
-        // dd($product);
-        $p = Product::where([
+
+        // Retrieve existing product or create new instance
+        $p = Product::firstOrCreate([
             'shop_id' => $shop->id,
             'shopify_id' => $product->id
-        ])->first();
-        if ($p === null) {
-            $p = new Product();
-        }
-        if ($product->images) {
-            $image = $product->images[0]->src;
-        } else {
-            $image = '';
-        }
-        $p->shopify_id = $product->id;
-        $p->shop_id = $shop->id;
-        $p->title = $product->title;
-        $p->description = $product->body_html;
-        $p->handle = $product->handle;
-        $p->vendor = $product->vendor;
-        $p->type = $product->product_type;
-        $p->featured_image = $image;
-        $p->tags = $product->tags;
+        ], [
+            'title' => $product->title,
+            'description' => $product->body_html,
+            'handle' => $product->handle,
+            'vendor' => $product->vendor,
+            'type' => $product->product_type,
+            'tags' => $product->tags,
+            'status' => $product->status,
+            'published_at' => $product->published_at
+        ]);
+
+        // Assign or update the remaining fields
+        $p->featured_image = $product->images ? $product->images[0]->src : '';
         $p->options = json_encode($product->options);
-        $p->status = $product->status;
-        $p->published_at = $product->published_at;
         $p->save();
-        if (count($product->variants) >= 1) {
+        // dd($p);
+
+        // Process variants
+        if (!empty($product->variants)) {
             foreach ($product->variants as $variant) {
-                $v = ProductVariant::where('shopify_id', $variant->id)->first();
-                if ($v === null) {
-                    $v = new ProductVariant();
-                }
-                $v->shop_id = $shop->id;
-                $v->shopify_id = $variant->id;
-                $v->shopify_product_id = $variant->product_id;
-                $v->title = $variant->title;
-                $v->option1 = $variant->option1;
-                $v->option2 = $variant->option2;
-                $v->option3 = $variant->option3;
-                $v->sku = $variant->sku;
-                $v->requires_shipping = $variant->requires_shipping;
-                $v->fulfillment_service = $variant->fulfillment_service;
-                $v->taxable = $variant->taxable;
-                if (isset($product->images)) {
+                $v = ProductVariant::firstOrCreate([
+                    'shopify_id' => $variant->id
+                ], [
+                    'shop_id' => $shop->id,
+                    'shopify_product_id' => $variant->product_id,
+                    'title' => $variant->title,
+                    'option1' => $variant->option1,
+                    'option2' => $variant->option2,
+                    'option3' => $variant->option3,
+                    'sku' => $variant->sku,
+                    'requires_shipping' => $variant->requires_shipping,
+                    'fulfillment_service' => $variant->fulfillment_service,
+                    'taxable' => $variant->taxable,
+                    'price' => $variant->price,
+                    'compare_at_price' => $variant->compare_at_price,
+                    'weight' => $variant->weight,
+                    'grams' => $variant->grams,
+                    'weight_unit' => $variant->weight_unit,
+                    'inventory_item_id' => $variant->inventory_item_id,
+                    'inventory_management' => $variant->inventory_management,
+                    'inventory_quantity' => $variant->inventory_quantity,
+                    'inventory_policy' => $variant->inventory_policy
+                ]);
+
+                // Handle variant images
+                $v->image = '';
+                if (!empty($product->images)) {
                     foreach ($product->images as $image) {
-                        if (isset($variant->image_id)) {
-                            if ($image->id == $variant->image_id) {
-                                $v->image = $image->src;
-                            }
-                        } else {
-                            $v->image = "";
+                        if (isset($variant->image_id) && $image->id == $variant->image_id) {
+                            $v->image = $image->src;
+                            break;
                         }
                     }
                 }
-                $v->price = $variant->price;
-                $v->compare_at_price = $variant->compare_at_price;
-                $v->weight = $variant->weight;
-                $v->grams = $variant->grams;
-                $v->weight_unit = $variant->weight_unit;
-                $v->inventory_item_id = $variant->inventory_item_id;
-                $v->inventory_management = $variant->inventory_management;
-                $v->inventory_quantity = $variant->inventory_quantity;
-                $v->inventory_policy = $variant->inventory_policy;
                 $v->save();
+                // dd($v);
             }
         }
     }

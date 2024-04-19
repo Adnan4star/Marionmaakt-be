@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 class FilterValue extends Model
 {
     use HasFactory;
+    
+    protected $fillable = ['filter_id', 'value'];
 
     public function articleFilter()
     {
