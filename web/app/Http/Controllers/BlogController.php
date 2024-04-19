@@ -206,6 +206,7 @@ class BlogController extends Controller
             $blog_article->level=$request->level;
             $blog_article->shelf_life=$request->shelf_life;
             $blog_article->no_of_ingredients=$request->no_of_ingredients;
+            // $blog_article->tags = $request->tags;
             $blog_article->save();
             // dd($blog_article);
             if(isset($request->ingredient_products)) {

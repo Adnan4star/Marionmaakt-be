@@ -42,7 +42,6 @@ class ProductController extends Controller
     {
         $product = json_decode(json_encode($product), false);
 
-        // Retrieve existing product or create new instance
         $p = Product::firstOrCreate([
             'shop_id' => $shop->id,
             'shopify_id' => $product->id
@@ -57,13 +56,11 @@ class ProductController extends Controller
             'published_at' => $product->published_at
         ]);
 
-        // Assign or update the remaining fields
         $p->featured_image = $product->images ? $product->images[0]->src : '';
         $p->options = json_encode($product->options);
         $p->save();
         // dd($p);
 
-        // Process variants
         if (!empty($product->variants)) {
             foreach ($product->variants as $variant) {
                 $v = ProductVariant::firstOrCreate([
@@ -90,7 +87,6 @@ class ProductController extends Controller
                     'inventory_policy' => $variant->inventory_policy
                 ]);
 
-                // Handle variant images
                 $v->image = '';
                 if (!empty($product->images)) {
                     foreach ($product->images as $image) {

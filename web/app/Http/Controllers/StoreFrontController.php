@@ -10,46 +10,66 @@ use Illuminate\Http\Request;
 
 class StoreFrontController extends Controller
 {
-    public function SearchBlog(Request $request){
+    public function SearchBlog(Request $request)
+    {
         if ($request->input('value')) {
-            $blog_article=BlogArticle::query();
-            $blog_article = $blog_article->where('title', 'like', '%' . $request->value . '%')->get();
+            $blog_article = BlogArticle::where('title', 'like', '%' . $request->input('value') . '%')->get();
+            
+            if ($blog_article->isEmpty()) {
+                $data = [
+                    'success' => false,
+                    'message' => 'No records found against title',
+                ];
+            } else {
+                $data = [
+                    'success' => true,
+                    'data' => $blog_article,
+                ];
+            }
+        } else {
             $data = [
-                'success'=>true,
-                'data' => $blog_article,
-            ];
-
-        }else{
-            $data = [
-                'success'=>false,
-                'message' => 'Not Found',
+                'success' => false,
+                'message' => 'No search value provided',
             ];
         }
         return response()->json($data);
     }
 
-    public function FilterBlog(Request $request){
-        if ($request->input('tags')) {
-                $tags=explode(',',$request->tags);
-
-                $filters_values=FilterValue::whereIn('value',$tags)->pluck('id')->toArray();
-                $article_filter=ArticleFilter::whereIn('filter_value_id',$filters_values)->pluck('article_id')->toArray();
-            $unique_article_filter = array_unique($article_filter);
-
-            $blog_article=BlogArticle::whereIn('id',$unique_article_filter)->get();
-
-            $data = [
-                'success'=>true,
-                'data' => $blog_article,
-            ];
-
-        }else{
-
-            $data = [
-                'success'=>false,
-                'message' => 'Not Found',
-            ];
+    public function FilterBlog(Request $request)
+    {
+        $tags = $request->input('tags');
+        if (!$tags) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tags input is required'
+            ]);
         }
-        return response()->json($data);
+
+        $tagsArray = explode(',', $tags);
+
+        $filterIds = FilterValue::whereIn('value', $tagsArray)->pluck('id');
+
+        if ($filterIds->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No matching filter values found'
+            ]);
+        }
+
+        $articleIds = ArticleFilter::whereIn('filter_value_id', $filterIds)->pluck('article_id')->unique();
+
+        if ($articleIds->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No articles found for the given tags'
+            ]);
+        }
+
+        $articles = BlogArticle::whereIn('id', $articleIds)->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $articles
+        ]);
     }
 }
