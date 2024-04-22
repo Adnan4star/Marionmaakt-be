@@ -38,38 +38,38 @@ class StoreFrontController extends Controller
     public function FilterBlog(Request $request)
     {
         $tags = $request->input('tags');
-        if (!$tags) {
+        if(!$tags){
             return response()->json([
                 'success' => false,
-                'message' => 'Tags input is required'
+                'message' => 'tags input is reqired',
+            ]);
+        }
+        $tagsArray = explode(',',$tags);
+
+        $filterId = FilterValue::whereIn('value',$tagsArray)->pluck('id');
+
+        if ($filterId->isEmpty()){
+            return response()->json([
+                'success' => false,
+                'message' => 'No matching records found.'
             ]);
         }
 
-        $tagsArray = explode(',', $tags);
+        $articleId = ArticleFilter::whereIn('filter_value_id', $filterId)->pluck('article_id');
 
-        $filterIds = FilterValue::whereIn('value', $tagsArray)->pluck('id');
-
-        if ($filterIds->isEmpty()) {
+        if ($articleId->isEmpty()){
             return response()->json([
                 'success' => false,
-                'message' => 'No matching filter values found'
+                'message' => 'No article found against given tag.'
             ]);
         }
+        // dd($articleId);
 
-        $articleIds = ArticleFilter::whereIn('filter_value_id', $filterIds)->pluck('article_id')->unique();
-
-        if ($articleIds->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No articles found for the given tags'
-            ]);
-        }
-
-        $articles = BlogArticle::whereIn('id', $articleIds)->get();
+        $article = BlogArticle::whereIn('id',$articleId)->get();
 
         return response()->json([
             'success' => true,
-            'data' => $articles
+            'data' => $article
         ]);
     }
 }

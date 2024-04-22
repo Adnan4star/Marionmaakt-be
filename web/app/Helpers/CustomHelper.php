@@ -2,9 +2,11 @@
 
 function getShop($session)
 {
-    return $session
-    ? \App\Models\Session::where('shop',$session->getShop())->first()
-    : \App\Models\Session::first();
+    if ($session) {
+        return \App\Models\Session::where('shop', $session->getShop())->first();
+    } else {
+        return \App\Models\Session::first();
+    }
 }
 function getClient($session)
 {

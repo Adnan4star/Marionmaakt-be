@@ -12,7 +12,9 @@ class ProductController extends Controller
 {
     public function ProductsSync(Request $request)
     {
+        // dd($request->all());
         $shop = getShop($request->get('shopifySession'));
+        // dd($shop);
         $this->syncProducts($shop);
     }
     
@@ -23,8 +25,9 @@ class ProductController extends Controller
             'limit' => 250,
             'page_info' => $nextPage,
         ]);
+        // dd($result);
         $products = $result->getDecodedBody()['products'];
-        // dd($products);
+        dd($products);
         foreach ($products as $product) {
             $this->createUpdateProduct($product, $session);
         }

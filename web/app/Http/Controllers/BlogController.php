@@ -15,39 +15,45 @@ use App\Models\FilterValue;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Session;
+use Exception;
 use Illuminate\Http\Request;
+use PHPUnit\Framework\Constraint\Count;
 use Shopify\Clients\Rest;
 
 class BlogController extends Controller
 {
-
-    public function index(Request $request)
-    {
+    public function index(Request $request){
         $shop = getShop($request->get('shopifySession'));
-        if (!$shop) {
-            return response()->json(['success' => false, 'message' => 'Shop not found'], 404);
+        if(!$shop){
+            return response()->json([
+                'success' => false,
+                'message' => 'Shop not found.'
+            ], 404);
         }
-
         try {
-            $blogs = BlogArticle::where('shop_id', $shop->id)->orderBy('id', 'desc')->paginate(20);
+            $blogs = BlogArticle::where('shop_id',$shop->id)->orderBy('id', 'desc')->paginate(20);
             return response()->json($blogs);
         } catch (\Exception $exception) {
-            return response()->json(['success' => false, 'message' => $exception->getMessage()], 500);
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage()
+            ], 500);
         }
     }
 
-    public function BlogsSync(Request $request)
-    {
+    public function BlogsSync(Request $request){
         $shop = getShop($request->get('shopifySession'));
-        if (!$shop) {
-            return response()->json(['success' => false, 'message' => 'Shop not found'], 404);
+        if (!$shop){
+            return response()->json([
+                'success' => false,
+                'message' => 'Shop not found.'
+            ], 404);
         }
-
         try {
             $this->syncBlogs($shop);
             return response()->json([
                 'success' => true,
-                'message' => 'Blogs synced successfully',
+                'message' => 'Blogs synced successfully.'
             ]);
         } catch (\Exception $exception) {
             return response()->json([
@@ -60,25 +66,23 @@ class BlogController extends Controller
     public function syncBlogs($session, $nextPage = null)
     {
         $client = new Rest($session->shop, $session->access_token);
-        $result = $client->get('blogs', [], [
+        $result = $client->get('blogs',[],[
             'limit' => 250,
             'page_info' => $nextPage,
         ]);
-
-        if($nextPage==null){
+        // dd($result);
+        if($nextPage == null){
             $blog_ids=[];
         }
+        
         $blogs = $result->getDecodedBody()['blogs'];
-        // dd($blogs);
-        foreach ($blogs as $blog) {
-            // if($blog['id']==110005387586) {
-                array_push($blog_ids, $blog['id']);
-                $this->createUpdateBlog($blog, $session);
-            // }
+        foreach($blogs as $blog){
+            array_push($blog_ids, $blog['id']);
+            $this->createUpdateBlog($blog,$session);
         }
 
-        if (isset($result)) {
-            if ($result->getPageInfo() ? true : false) {
+        if(isset($result)){
+            if ($result->getPageInfo() ? true : false){
                 $nextUrl = $result->getPageInfo()->getNextPageUrl();
                 if (isset($nextUrl)) {
                     $arr = explode('page_info=', $result->getPageInfo()->getNextPageUrl());
@@ -93,38 +97,60 @@ class BlogController extends Controller
     {
         $blog = json_decode(json_encode($blogData), false);
         $b = Blog::firstOrCreate(
-            ['shopify_id' => $blog->id, 'shop_id' => $shop->id],
-            ['title' => $blog->title, 'handle' => $blog->handle, 'tags' => $blog->tags, 'commentable' => $blog->commentable, 'feedburner' => $blog->feedburner, 'feedburner_location' => $blog->feedburner_location]
+            [
+                'shopify_id' => $blog->id,
+                'shop_id' => $shop->id,
+            ],
+            [
+                'title' => $blog->title,
+                'handle' => $blog->handle,
+                'tags' => $blog->tags,
+                'commentable' => $blog->commentable,
+                'feedburner' => $blog->feedburner,
+                'feedburner_location' => $blog->feedburner_location,
+            ]
         );
 
         $client = new Rest($shop->shop, $shop->access_token);
-        $articlesResult = $client->get('/admin/api/2023-07/blogs/' . $blog->id . '/articles.json');
-        $articles = $articlesResult->getDecodedBody()['articles'] ?? [];
-        // dd($articles);
+        $ArticleResult = $client->get('/admin/api/2023-07/blogs/' .$blog->id. '/articles.json');
+        $articles = $ArticleResult->getDecodedBody()['articles'] ?? [];
 
         $blog_article_ids = [];
-        foreach ($articles as $articleData) {
+        foreach($articles as $articleData){
             $article = json_decode(json_encode($articleData), false);
             $a = BlogArticle::firstOrCreate(
-                ['shopify_id' => $article->id, 'shop_id' => $shop->id],
-                ['title' => $article->title, 'handle' => $article->handle, 'tags' => $article->tags, 'published_at' => $article->published_at, 'shopify_blog_id' => $article->blog_id, 'blog_id' => $b->id, 'author' => $article->author, 'user_id' => $article->user_id, 'body_html' => $article->body_html, 'summary_html' => $article->summary_html]
+                [
+                    'shopify_id' => $article->id,
+                    'shop_id' => $shop->id,
+                ],
+                [
+                    'title' => $article->title,
+                    'body_html' => $article->body_html,
+                    'summary_html' => $article->summary_html,
+                    'shopify_blog_id' => $article->blog_id,
+                    'author' => $article->author,
+                    'user_id' => $article->user_id,
+                    'handle' => $article->handle,
+                    'tags' => $article->tags,
+                    'published_at' => $article->published_at, 
+                    'blog_id' => $b->id,
+                ]
             );
             $a->image = isset($article->image) ? $article->image->src : null;
             $a->save();
-            // dd($a);
             $blog_article_ids[] = $article->id;
-            // dd($blog_article_ids);
         }
-
         BlogArticle::where('blog_id', $b->id)->whereNotIn('shopify_id', $blog_article_ids)->delete();
     }
 
-    public function CreateBlog(Request $request)
-    {
+    public function CreateBlog(Request $request){
         try {
             $shop = getShop($request->get('shopifySession'));
             if (!$shop) {
-                return response()->json(['success' => false, 'message' => 'Shop not found'], 404);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No shop found.'
+                ], 404);
             }
 
             $products = Product::all();
@@ -133,7 +159,7 @@ class BlogController extends Controller
             return response()->json([
                 'products' => $products,
                 'filters' => $filters,
-                'success' => true
+                'success' => true,
             ]);
         } catch (\Exception $exception) {
             return response()->json([
@@ -144,28 +170,22 @@ class BlogController extends Controller
     }
 
     public function SaveBlog(Request $request){
-
-        $blog=Blog::first();
-
-        $session=Session::first();
+        $blog = Blog::first();
+        $session = Session::first();
         $client = new Rest($session->shop, $session->access_token);
-        // dd($client);
 
-        if($request->published_at=='hidden'){
-            $published_at=false;
-            $db_published_at=null;
+        if ($request->published_at == 'hidden'){
+            $published_at = false;
         }else{
-            $published_at=now();
-            $db_published_at=now();
+            $published_at = now();
         }
 
-        if ($request->hasFile('featured_image')) {
+        if ($request->hasFile('featured_image')){
             $file = $request->file('featured_image');
             $destinationPath = 'images/';
             $filename1 = now()->format('YmdHi') . str_replace([' ', '(', ')'], '-', $file->getClientOriginalName());
             $file->move($destinationPath, $filename1);
             $filename1 = (asset('images/' . $filename1));
-
         }
 
         $article=$client->post('/admin/api/2023-10/blogs/'.$blog->shopify_id.'/articles.json',[
@@ -181,14 +201,13 @@ class BlogController extends Controller
             )
         ]);
         $response = $article->getDecodedBody();
-        // dd($response);
+        
         if (isset($response) && !isset($response['errors'])) {
-
-            $response=$response['article'];
-            $blog_article=new BlogArticle();
-            $blog_article->shop_id=$session->id;
-            $blog_article->blog_id=$blog->id;
-            $blog_article->shopify_id=$response['id'];
+            $response = $response['article'];
+            $blog_article = new BlogArticle();
+            $blog_article->shop_id = $session->id;
+            $blog_article->blog_id = $blog->id;
+            $blog_article->shopify_id = $response['id'];
             $blog_article->title=$response['title'];
             $blog_article->body_html=$response['body_html'];
             $blog_article->summary_html=$response['summary_html'];
@@ -197,7 +216,7 @@ class BlogController extends Controller
             $blog_article->author=$response['author'];
             $blog_article->user_id=$response['user_id'];
             $blog_article->handle=$response['handle'];
-            if($response['image']) {
+            if ($response['image']){
                 $blog_article->image = $response['image']['src'];
             }
             $blog_article->preparation=$request->preparation;
@@ -206,22 +225,20 @@ class BlogController extends Controller
             $blog_article->level=$request->level;
             $blog_article->shelf_life=$request->shelf_life;
             $blog_article->no_of_ingredients=$request->no_of_ingredients;
-            // $blog_article->tags = $request->tags;
             $blog_article->save();
-            // dd($blog_article);
-            if(isset($request->ingredient_products)) {
 
+            if (isset($request->ingredient_products)) {
                 foreach ($request->ingredient_products as $ingredient_product) {
-
+                    
                     $product = Product::find($ingredient_product['id']);
 
-                            $article_ingredient_product = new ArticleIngredientProduct();
-                            $article_ingredient_product->article_id = $blog_article->id;
-                            $article_ingredient_product->product_id = $product->id;
-                            $article_ingredient_product->grams = $ingredient_product['grams'];
-                            $article_ingredient_product->percentage = $ingredient_product['percentage'];
-                            $article_ingredient_product->phase = $ingredient_product['phase'];
-                            $article_ingredient_product->save();
+                    $article_ingredient_product = new ArticleIngredientProduct();
+                    $article_ingredient_product->article_id = $blog_article['id'];
+                    $article_ingredient_product->product_id = $product->id;
+                    $article_ingredient_product->grams = $request['grams'];
+                    $article_ingredient_product->percentage = $request['percentage'];
+                    $article_ingredient_product->phase = $request['phase'];
+                    $article_ingredient_product->save();
                 }
             }
 
@@ -290,32 +307,24 @@ class BlogController extends Controller
 
     public function UpdateBlog(Request $request){
 
-        $blog=Blog::first();
-        // dd($blog);
-        $session=Session::first();
-        // dd($session);
+        $blog = Blog::first();
+        $session = Session::first();
+        $blog_article = BlogArticle::find($request->id);
         $client = new Rest($session->shop, $session->access_token);
-        // dd($client);
-        $blog_article=BlogArticle::find($request->id);
-        // dd($blog_article);
-        if($request->published_at=='hidden'){
-            $published_at=false;
-            $db_published_at=null;
+
+        if ($request->published_at == 'hidden'){
+            $published_at = false;
         }else{
-            $published_at=now();
-            $db_published_at=now();
+            $published_at = now();
         }
 
-
-        if ($request->hasFile('featured_image')) {
+        if ($request->hasFile('featured_image')){
             $file = $request->file('featured_image');
             $destinationPath = 'images/';
             $filename1 = now()->format('YmdHi') . str_replace([' ', '(', ')'], '-', $file->getClientOriginalName());
             $file->move($destinationPath, $filename1);
             $filename1 = (asset('images/' . $filename1));
-
         }
-
 
         $article=$client->put('/admin/api/2023-10/blogs/'.$blog->shopify_id.'/articles/'.$blog_article->shopify_id.'.json',[
             'article'=>array(
@@ -330,13 +339,13 @@ class BlogController extends Controller
             )
         ]);
         $response = $article->getDecodedBody();
-        // dd($response);
+        
         if (isset($response) && !isset($response['errors'])) {
-
-            $response=$response['article'];
-            $blog_article->shop_id=$session->id;
-            $blog_article->blog_id=$blog->id;
-            $blog_article->shopify_id=$response['id'];
+            $response = $response['article'];
+            $blog_article = new BlogArticle();
+            $blog_article->shop_id = $session->id;
+            $blog_article->blog_id = $blog->id;
+            $blog_article->shopify_id = $response['id'];
             $blog_article->title=$response['title'];
             $blog_article->body_html=$response['body_html'];
             $blog_article->summary_html=$response['summary_html'];
@@ -345,7 +354,7 @@ class BlogController extends Controller
             $blog_article->author=$response['author'];
             $blog_article->user_id=$response['user_id'];
             $blog_article->handle=$response['handle'];
-            if($response['image']) {
+            if ($response['image']){
                 $blog_article->image = $response['image']['src'];
             }
             $blog_article->preparation=$request->preparation;
@@ -356,26 +365,23 @@ class BlogController extends Controller
             $blog_article->no_of_ingredients=$request->no_of_ingredients;
             $blog_article->save();
 
-            // dd($blog_article);
-            if(isset($request->ingredient_products)) {
-                ArticleIngredientProduct::where('article_id',$request->id)->delete();
+            if (isset($request->ingredient_products)) {
                 foreach ($request->ingredient_products as $ingredient_product) {
-
+                    
                     $product = Product::find($ingredient_product['id']);
 
-                            $article_ingredient_product = new ArticleIngredientProduct();
-                            $article_ingredient_product->article_id = $blog_article->id;
-                            $article_ingredient_product->product_id = $product->id;
-                            $article_ingredient_product->grams = $ingredient_product['grams'];
-                            $article_ingredient_product->percentage = $ingredient_product['percentage'];
-                            $article_ingredient_product->phase = $ingredient_product['phase'];
-                            $article_ingredient_product->save();
+                    $article_ingredient_product = new ArticleIngredientProduct();
+                    $article_ingredient_product->article_id = $blog_article['id'];
+                    $article_ingredient_product->product_id = $product->id;
+                    $article_ingredient_product->grams = $request['grams'];
+                    $article_ingredient_product->percentage = $request['percentage'];
+                    $article_ingredient_product->phase = $request['phase'];
+                    $article_ingredient_product->save();
                 }
-                // dd($article_ingredient_product);
             }
 
             if(isset($request->tool_accessories)) {
-                ArticleToolAccessory::where('article_id',$request->id)->delete();
+
                 foreach ($request->tool_accessories as $tool_accessory) {
 
                     $product = Product::find($tool_accessory['id']);
@@ -384,18 +390,16 @@ class BlogController extends Controller
                     $article_tool_accessory->product_id = $product->id;
                     $article_tool_accessory->save();
                 }
-                // dd($article_tool_accessory);
             }
-            
+
             if(isset($request->instructions)) {
-                ArticleInstruction::where('article_id',$request->id)->delete();
+
                 foreach ($request->instructions as $instruction) {
                     $article_instruction = new ArticleInstruction();
                     $article_instruction->article_id = $blog_article->id;
                     $article_instruction->instructions = $instruction;
                     $article_instruction->save();
                 }
-                // dd($article_instruction);
             }
 
             if(isset($request->usage)){
@@ -404,7 +408,6 @@ class BlogController extends Controller
             }
 
             if(isset($request->filters)){
-                ArticleFilter::where('article_id',$request->id)->delete();
                 foreach ($request->filters as $filter) {
                     $filter_article=new ArticleFilter() ;
                     $filter_article->article_id = $blog_article->id;
@@ -416,7 +419,6 @@ class BlogController extends Controller
             }
 
             if(isset($request->additional_details)){
-                ArticleDescription::where('article_id',$request->id)->delete();
                 foreach ($request->additional_details as $additional_detail) {
                     $article_description=new ArticleDescription() ;
                     $article_description->article_id = $blog_article->id;
@@ -426,10 +428,11 @@ class BlogController extends Controller
 
                 }
             }
+
             $this->CreateUpdateMetafield($blog_article,$session);
             $data = [
                 'success'=>true,
-                'message' => 'Blog Article updated Successfully',
+                'message' => 'Blog article updated successfully',
             ];
         }else{
             $data = [
@@ -593,7 +596,7 @@ class BlogController extends Controller
 
         return response()->json($data);
     }
-
+    
     public function EditBlog(Request $request){
         $blog_article = BlogArticle::find($request->id);
         if($blog_article){
@@ -603,7 +606,7 @@ class BlogController extends Controller
             $tool_accessory=array();
             $instructions=array();
             $additonal_details=array();
-
+            
             if(count($blog_article->ArticleIngredientProduct) > 0 ){
                 foreach ($blog_article->ArticleIngredientProduct as $ar_ingredient_product){
 
@@ -612,6 +615,7 @@ class BlogController extends Controller
                     $data_ingredient['percentage']=$ar_ingredient_product->percentage;
                     $data_ingredient['phase']=$ar_ingredient_product->phase;
                     array_push($ingredient_product,$data_ingredient);
+                    // dd($ingredient_product);
                 }
             }
 
@@ -626,10 +630,6 @@ class BlogController extends Controller
                     array_push($instructions,$ar_instruction->instructions);
                 }
             }
-
-
-
-
 
             if(count($blog_article->ArticleDescriptions) > 0 ){
                 foreach ($blog_article->ArticleDescriptions as $articleDescription){
