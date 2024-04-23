@@ -37,6 +37,8 @@ Route::delete('delete-blog',[\App\Http\Controllers\BlogController::class,'Delete
 //product
 Route::get('products',[\App\Http\Controllers\ProductController::class,'ProductsSync']);
 
+Route::get('show-product',[\App\Http\Controllers\ProductController::class, 'showProduct']);
+
 //store front
 Route::get('search-blog',[\App\Http\Controllers\StoreFrontController::class,'SearchBlog']);
 Route::get('filter-blog',[\App\Http\Controllers\StoreFrontController::class,'FilterBlog']);

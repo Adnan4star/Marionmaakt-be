@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Shopify\Clients\Rest;
@@ -12,12 +13,11 @@ class ProductController extends Controller
 {
     public function ProductsSync(Request $request)
     {
-        // dd($request->all());
         $shop = getShop($request->get('shopifySession'));
         // dd($shop);
         $this->syncProducts($shop);
     }
-    
+
     public function syncProducts($session, $nextPage = null)
     {
         $client = new Rest($session->shop, $session->access_token);
@@ -27,7 +27,7 @@ class ProductController extends Controller
         ]);
         // dd($result);
         $products = $result->getDecodedBody()['products'];
-        dd($products);
+        // dd($products);
         foreach ($products as $product) {
             $this->createUpdateProduct($product, $session);
         }
@@ -43,8 +43,8 @@ class ProductController extends Controller
 
     public function createUpdateProduct($product, $shop)
     {
+        // dd($product);
         $product = json_decode(json_encode($product), false);
-
         $p = Product::firstOrCreate([
             'shop_id' => $shop->id,
             'shopify_id' => $product->id
@@ -58,6 +58,24 @@ class ProductController extends Controller
             'status' => $product->status,
             'published_at' => $product->published_at
         ]);
+            
+        foreach ($product->images as $imageData) {
+            // dd($product->images);
+       
+            $image = ProductImage::updateOrCreate(
+                [
+                    'product_id' => $p->id,
+                    'shopify_id' => $imageData->id
+                ],
+                [
+                    'alt' => $imageData->alt,
+                    'position' => $imageData->position,
+                    'width' => $imageData->width,
+                    'height' => $imageData->height,
+                    'src' => $imageData->src,
+                ]
+            );
+        }
 
         $p->featured_image = $product->images ? $product->images[0]->src : '';
         $p->options = json_encode($product->options);
@@ -102,6 +120,31 @@ class ProductController extends Controller
                 $v->save();
                 // dd($v);
             }
+        }
+    }
+
+    public function showProduct(Request $request){
+        $shop = getShop($request->get('shopifySession'));
+        if(!$shop){
+            return response()->json([
+                'success' => false,
+                'message' => 'Shop not found.'
+            ], 404);
+        }
+
+        try {
+            $products = Product::with('ProductVariant')->with('images')
+                    ->where('shop_id', $shop->id)
+                    ->orderBy('id', 'desc')
+                    ->paginate(20);
+
+            // dd($products);
+            return response()->json($products);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'success' => false,
+                'message' => $th->getMessage()
+            ], 500);
         }
     }
 

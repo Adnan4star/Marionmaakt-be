@@ -15,4 +15,9 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class, 'shopify_product_id','shopify_id');
     }
 
+    public function images()
+    {
+        return $this->hasMany(ProductImage::class);
+    }
+
 }

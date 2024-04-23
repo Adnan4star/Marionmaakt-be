@@ -71,7 +71,7 @@ class FilterController extends Controller
             }
 
             $this->CreateUpdateMetafield($shop);
-            DB::commit();  // Commit the transaction
+            DB::commit();  
 
             return response()->json([
                 'success' => true,
@@ -79,7 +79,7 @@ class FilterController extends Controller
                 'data' => $filter
             ]);
         } catch (\Exception $exception) {
-            DB::rollback();  // Roll back the transaction
+            DB::rollback();  
             return response()->json([
                 'success' => false,
                 'message' => $exception->getMessage(),
