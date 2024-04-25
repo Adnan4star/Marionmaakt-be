@@ -60,8 +60,6 @@ class ProductController extends Controller
         ]);
             
         foreach ($product->images as $imageData) {
-            // dd($product->images);
-       
             $image = ProductImage::updateOrCreate(
                 [
                     'product_id' => $p->id,
@@ -84,30 +82,32 @@ class ProductController extends Controller
 
         if (!empty($product->variants)) {
             foreach ($product->variants as $variant) {
-                $v = ProductVariant::firstOrCreate([
-                    'shopify_id' => $variant->id
-                ], [
-                    'shop_id' => $shop->id,
-                    'shopify_product_id' => $variant->product_id,
-                    'title' => $variant->title,
-                    'option1' => $variant->option1,
-                    'option2' => $variant->option2,
-                    'option3' => $variant->option3,
-                    'sku' => $variant->sku,
-                    'requires_shipping' => $variant->requires_shipping,
-                    'fulfillment_service' => $variant->fulfillment_service,
-                    'taxable' => $variant->taxable,
-                    'price' => $variant->price,
-                    'compare_at_price' => $variant->compare_at_price,
-                    'weight' => $variant->weight,
-                    'grams' => $variant->grams,
-                    'weight_unit' => $variant->weight_unit,
-                    'inventory_item_id' => $variant->inventory_item_id,
-                    'inventory_management' => $variant->inventory_management,
-                    'inventory_quantity' => $variant->inventory_quantity,
-                    'inventory_policy' => $variant->inventory_policy
-                ]);
-
+                $v = ProductVariant::firstOrCreate(
+                    [
+                        'shopify_id' => $variant->id
+                    ], 
+                    [
+                        'shop_id' => $shop->id,
+                        'shopify_product_id' => $variant->product_id,
+                        'title' => $variant->title,
+                        'option1' => $variant->option1,
+                        'option2' => $variant->option2,
+                        'option3' => $variant->option3,
+                        'sku' => $variant->sku,
+                        'requires_shipping' => $variant->requires_shipping,
+                        'fulfillment_service' => $variant->fulfillment_service,
+                        'taxable' => $variant->taxable,
+                        'price' => $variant->price,
+                        'compare_at_price' => $variant->compare_at_price,
+                        'weight' => $variant->weight,
+                        'grams' => $variant->grams,
+                        'weight_unit' => $variant->weight_unit,
+                        'inventory_item_id' => $variant->inventory_item_id,
+                        'inventory_management' => $variant->inventory_management,
+                        'inventory_quantity' => $variant->inventory_quantity,
+                        'inventory_policy' => $variant->inventory_policy
+                    ]
+                );
                 $v->image = '';
                 if (!empty($product->images)) {
                     foreach ($product->images as $image) {

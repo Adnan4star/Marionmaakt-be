@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class BlogArticle extends Model
 {
     use HasFactory;
+    protected $fillable = ['shop_id','shopify_id','title','body_html','summary_html','shopify_blog_id','author','user_id','handle','tags','published_at','blog_id'];
 
     public function ArticleIngredientProduct()
     {
