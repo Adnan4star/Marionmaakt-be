@@ -12,6 +12,37 @@ use Shopify\Clients\Rest;
 
 class FilterController extends Controller
 {
+    public function indexx(Request $request){
+        $shop = getShop($request->get('shopifySession'));
+        if (!$shop) {
+            return response()->json(['error' => 'Shop not found'], 404);
+        }
+
+        try {
+            $filters = Filter::query();
+            if (isset($request->status)){
+                if ($request->status == 1) {
+                    $filters->where('status', 1);
+                } elseif($request->status == 2){
+                    $filters->where('status', 0);
+                }
+            }else {
+                return response()->json(['success' => false, 'message' => 'Status is required']);
+            }
+            $filters = $filters->with('FilterValues')
+                        ->where('shop_id',$shop->id)
+                        ->orderBy('id', 'desc')
+                        ->paginate(20);
+            
+            return response()->json($filters);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'success' => false,
+                'message' => $th->getMessage()
+            ], 500);
+        }
+    }
+
     public function index(Request $request)
     {
         $shop = getShop($request->get('shopifySession'));
@@ -38,6 +69,47 @@ class FilterController extends Controller
             return response()->json($filters);
         } catch (\Exception $exception) {
             return response()->json(['error' => $exception->getMessage()], 500);
+        }
+    }
+
+    public function saveefilterr(Request $request) {
+        $shop = getShop($request->get('shopifySession'));
+        if(!$shop){
+            return response()->json(['success' => false, 'message' => 'Shop not found'], 404);
+        }
+
+        try {
+            if($request->filter_id){
+                $filter = Filter::find($request->filter_id);
+                FilterValue::where('filter_id', $filter->id)->delete();
+            } else{
+                $filter = new Filter();
+            }
+
+            $filter->label = $request->label;
+            $filter->status = $request->status;
+            $filter->shop_id = $shop->id;
+            $filter->save();
+
+            if($request->values){
+                $values=explode(',',$request->values);
+                foreach ($values as $value){
+                    $filter_value=new FilterValue();
+                    $filter_value->filter_id=$filter->id;
+                    $filter_value->value=$value;
+                    $filter_value->save();
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Filter saved successfully'
+            ]);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'success' => false,
+                'message' => $th->getMessage()
+            ]);
         }
     }
 
@@ -122,7 +194,9 @@ class FilterController extends Controller
             $filter->status = $request->status;
             $filter->save();
 
-            $this->CreateUpdateMetafield($shop);
+            $this->updateMetafield($shop);
+            // $this->CreateUpdateMetafield($shop);
+            
 
             return response()->json([
                 'success' => true,
@@ -168,9 +242,52 @@ class FilterController extends Controller
         }
     }
 
+    public function updateMetafield($session){
+        $client = new Rest($session->shop, $session->access_token);
+        $filters = Filter::with('FilterValues')->where('status',1)->get();
+        
+        $data_array = [];
+        foreach ($filters as $filter) {
+
+            $value_array=[];
+            if(count($filter->FilterValues) > 0){
+                foreach ($filter->FilterValues as $filter_value) {
+                    array_push($value_array, $filter_value->value);
+                }
+            }
+            $data['label'] = $filter->label;
+            $data['value'] = $value_array;
+
+            array_push($data_array, $data);
+            // dd($session);
+        }
+
+        if($session->metafield_id == null) {
+            $shop_metafield = $client->post('/metafields.json', [
+                "metafield" => [
+                    "key" => "filters",
+                    "value" => json_encode($data_array),
+                    "type" => "json_string",
+                    "namespace" => "Marionmaakt"
+                ]
+            ]);
+        }else {
+            $shop_metafield = $client->put('/metafields/' . $session->metafield_id . '.json', [
+                "metafield" => [
+                    "value" => json_encode($data_array)
+                ]
+            ]);
+        }
+        $response = $shop_metafield->getDecodedBody();
+        if (isset($response) && !isset($response['errors'])) {
+            $session->metafield_id = $response['metafield']['id'];
+            $session->save();
+            // dd($session);
+        }
+    }
+
     public function CreateUpdateMetafield($session)
     {
-
         $client = new Rest($session->shop, $session->access_token);
 
         $filters=Filter::with('FilterValues')->where('status',1)->get();
@@ -189,12 +306,34 @@ class FilterController extends Controller
             $data['value']=$value_array;
 
             array_push($data_array,$data);
+            // dd($data_array);
+        }
+        if ($session->metafield_id == null){
+            $shop_metafield = $client->post('/metafields.json',[
+                "metafield" => array(
+                    "key" => "filtersNew",
+                    "value" => json_encode($data_array),
+                    "type" => "json_string",
+                    "namespace" => "Marionmaakt",
+                )
+            ]);
+        }else {
+            $shop_metafield = $client->put('/metafields/'.$session->metafield_id. '.json',[
+                "metafield" => [
+                    "value" => json_encode($data_array),
+                ]
+            ]);
+        }
+        $response = $shop_metafield->getDecodedBody();
+        if(isset($response) && !isset($response['errors'])){
+            $session->metafield_id = $response['metafield']['id'];
+            $session->save();
         }
 
         if ($session->metafield_id == null) {
             $shop_metafield = $client->post('/metafields.json', [
                 "metafield" => array(
-                    "key" => 'filters',
+                    "key" => "filters",
                     "value" => json_encode($data_array),
                     "type" => "json_string",
                     "namespace" => "Marionmaakt"

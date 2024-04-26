@@ -457,8 +457,11 @@ class BlogController extends Controller
     public function UpdateBlog(Request $request){
 
         $blog = Blog::first();
+        // dd($blog);
         $session = Session::first();
+        // dd($session);
         $blog_article = BlogArticle::find($request->id);
+        // dd($blog_article);
         $client = new Rest($session->shop, $session->access_token);
 
         if ($request->published_at == 'hidden'){
@@ -474,7 +477,7 @@ class BlogController extends Controller
             $file->move($destinationPath, $filename1);
             $filename1 = (asset('images/' . $filename1));
         }
-
+        // dd($blog_article->shopify_id);
         $article=$client->put('/admin/api/2023-10/blogs/'.$blog->shopify_id.'/articles/'.$blog_article->shopify_id.'.json',[
             'article'=>array(
                 'title' => $request->title,
@@ -488,14 +491,17 @@ class BlogController extends Controller
             )
         ]);
         $response = $article->getDecodedBody();
-        
+        // dd($response);
         if (isset($response) && !isset($response['errors'])) {
             $response = $response['article'];
             $blog_article = new BlogArticle();
             $blog_article->shop_id = $session->id;
+            
             $blog_article->blog_id = $blog->id;
             $blog_article->shopify_id = $response['id'];
+            
             $blog_article->title=$response['title'];
+            
             $blog_article->body_html=$response['body_html'];
             $blog_article->summary_html=$response['summary_html'];
             $blog_article->published_at=$response['published_at'];
@@ -577,8 +583,9 @@ class BlogController extends Controller
 
                 }
             }
-
+            // $this->metafieldsCreateUpdate($blog_article,$session);
             $this->CreateUpdateMetafield($blog_article,$session);
+
             $data = [
                 'success'=>true,
                 'message' => 'Blog article updated successfully',
@@ -592,8 +599,104 @@ class BlogController extends Controller
         return response()->json($data);
     }
 
-    public function CreateUpdateMetafield($blog_article,$session){
+    public function metafieldsCreateUpdate($blog_article, $session){
+        $client = new Rest($session->shop, $session->access_token);
 
+        $ingredient_product = array();
+        $tool_accessory = array();
+        $instructions = array();
+        $additonal_details = array();
+
+        if(count($blog_article->ArticleIngredientProduct) > 0) {
+            foreach ($blog_article->ArticleIngredientProduct as $ar_ingredient_product) {
+                $data_ingredient['handle'] = $ar_ingredient_product->ProductRecord->handle;
+                $data_ingredient['grams'] = $ar_ingredient_product->grams;
+                $data_ingredient['percentage'] = $ar_ingredient_product->percentage;
+                $data_ingredient['phase'] = $ar_ingredient_product->phase;
+                array_push($ingredient_product, $data_ingredient);
+            }
+        }
+
+        if(count($blog_article->ArticleToolAccessory) > 0 ){
+            foreach ($blog_article->ArticleToolAccessory as $ar_tool_accessory){
+                array_push($tool_accessory,$ar_tool_accessory->ProductRecord->handle);
+            }
+        }
+
+        if(count($blog_article->ArticleInstructions) > 0 ){
+            foreach ($blog_article->ArticleInstructions as $ar_instruction){
+                array_push($instructions,$ar_instruction->instructions);
+            }
+        }
+
+        $article_filters  = ArticleFilter::with('filterValues')
+                            ->where('article_id',$blog_article->id)
+                            ->get();
+        // dd($article_filters);
+        $temporary_array = [];
+        foreach ($article_filters as $filters) {
+            $grouped_values = $filters->filterValues->groupBy('filter_id');
+            
+            foreach ($grouped_values as $filter_id => $values) {
+                $value_array = [];
+                foreach ($values as $value) {
+                    $value_array = $value->value;
+                    // dd($value_array);
+                }
+                $filter_1 = Filter::where('id', $filter_id)->first();
+                // dd($filter_1);
+                if (isset($temporary_array[$filter_1 -> label])) {
+                    $temporary_array[$filter_1 -> label]['value'] = array_merge($temporary_array[$filter_1 -> label]['value'], $value_array);
+                }else{
+                    $temporary_array[$filter_1->label] = [
+                        'label' => $filter_1->label,
+                        'value' => $value_array
+                    ];
+                    // dd($temporary_array[$filter_1->label]);
+                }
+            }
+        }
+        $data_array = array_values($temporary_array);
+
+        if(count($blog_article->ArticleDescriptions) > 0 ){
+            foreach ($blog_article->ArticleDescriptions as $articleDescription){
+
+                $additional_data['name']=$articleDescription->name;
+                $additional_data['description']=$articleDescription->description;
+                array_push($additonal_details,$additional_data);
+            }
+        }
+
+        $getdata['preparation']=$blog_article->preparation;
+        $getdata['total_time']=$blog_article->total_time;
+        $getdata['recipe_by']=$blog_article->recipe_by;
+        $getdata['level']=$blog_article->level;
+        $getdata['shelf_life']=$blog_article->shelf_life;
+        $getdata['no_of_ingredients']=$blog_article->no_of_ingredients;
+        $getdata['ingredient_product']=$ingredient_product;
+        $getdata['tools_accessories']=$tool_accessory;
+        $getdata['instructions']=$instructions;
+        $getdata['additional_details']=$additonal_details;
+        $getdata['usage']=$blog_article->usage;
+        $getdata['filters']=$data_array;
+
+        $metafield_data = [
+            'metafield' => [
+                "key" => 'recipe_details',
+                "value" => json_encode($getdata),
+                "type" => "json_string",
+                "namespace" => "Marionmaakt",
+            ]
+        ];
+        $article_metafield = $client->post('/articles' . $blog_article->shopify_id . '/metafields.json', $metafield_data);
+        $metafield_data = $article_metafield->getDecodedBody();
+        if (isset($metafield_data) && !isset($metafield_data['errors'])) {
+            
+        }
+    }
+
+    public function CreateUpdateMetafield($blog_article,$session){
+        // dd($blog_article);
         $client = new Rest($session->shop, $session->access_token);
         
         $getdata=array();
@@ -630,7 +733,7 @@ class BlogController extends Controller
         $article_filters = ArticleFilter::with('FilterValues')
             ->where('article_id', $blog_article->id)
             ->get();
-
+        
 // Temporary array to hold values for each label
         $temporary_array = [];
 
@@ -638,7 +741,7 @@ class BlogController extends Controller
 
             // Group filter values for each article filter
             $grouped_values = $filter->filterValues->groupBy('filter_id');
-
+            
             // Iterate over each group of values
             foreach ($grouped_values as $filter_id => $values) {
                 // Create an array to hold the values
@@ -647,7 +750,7 @@ class BlogController extends Controller
                     $value_array[] = $value->value;
                 }
                 $filter_l = Filter::where('id', $filter_id)->first();
-
+                // dd($filter_l);
                 // Check if label already exists in the temporary array
                 if (isset($temporary_array[$filter_l->label])) {
                     // If exists, merge the values
@@ -697,7 +800,7 @@ class BlogController extends Controller
         $metafield_data = [
             "metafield" =>
                 [
-                    "key" => 'receipe_details',
+                    "key" => 'receipe_details_blog',
                     "value" => json_encode($getdata),
                     "type" => "json_string",
                     "namespace" => "Marionmaakt",
