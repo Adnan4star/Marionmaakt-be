@@ -20,6 +20,7 @@ Route::get('edit-filter',[\App\Http\Controllers\FilterController::class,'EditFil
 Route::post('filter-save',[\App\Http\Controllers\FilterController::class,'SaveFilter']);
 Route::delete('delete-filter',[\App\Http\Controllers\FilterController::class,'DeleteFilter']);
 Route::get('update-filter-status',[\App\Http\Controllers\FilterController::class,'UpdateFilterStatus']);
+Route::delete('delete-filter-metafield',[\App\Http\Controllers\FilterController::class,'delFilterMetafield']);
 
 //Blog
 Route::get('blogs',[\App\Http\Controllers\BlogController::class,'index']);

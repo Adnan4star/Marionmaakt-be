@@ -396,6 +396,7 @@ class BlogController extends Controller
                 foreach ($request->tool_accessories as $tool_accessory) {
 
                     $product = Product::find($tool_accessory['id']);
+
                     $article_tool_accessory = new ArticleToolAccessory();
                     $article_tool_accessory->article_id = $blog_article->id;
                     $article_tool_accessory->product_id = $product->id;
@@ -455,13 +456,9 @@ class BlogController extends Controller
     }
 
     public function UpdateBlog(Request $request){
-
         $blog = Blog::first();
-        // dd($blog);
         $session = Session::first();
-        // dd($session);
         $blog_article = BlogArticle::find($request->id);
-        // dd($blog_article);
         $client = new Rest($session->shop, $session->access_token);
 
         if ($request->published_at == 'hidden'){
@@ -496,12 +493,9 @@ class BlogController extends Controller
             $response = $response['article'];
             $blog_article = new BlogArticle();
             $blog_article->shop_id = $session->id;
-            
             $blog_article->blog_id = $blog->id;
             $blog_article->shopify_id = $response['id'];
-            
             $blog_article->title=$response['title'];
-            
             $blog_article->body_html=$response['body_html'];
             $blog_article->summary_html=$response['summary_html'];
             $blog_article->published_at=$response['published_at'];
@@ -731,10 +725,10 @@ class BlogController extends Controller
 
         $data_array = [];
         $article_filters = ArticleFilter::with('FilterValues')
-            ->where('article_id', $blog_article->id)
-            ->get();
+                        ->where('article_id', $blog_article->id)
+                        ->get();
         
-// Temporary array to hold values for each label
+        // Temporary array to hold values for each label
         $temporary_array = [];
 
         foreach ($article_filters as $filter) {
@@ -750,6 +744,7 @@ class BlogController extends Controller
                     $value_array[] = $value->value;
                 }
                 $filter_l = Filter::where('id', $filter_id)->first();
+                dd($filter_l->label);
                 // dd($filter_l);
                 // Check if label already exists in the temporary array
                 if (isset($temporary_array[$filter_l->label])) {
@@ -779,7 +774,6 @@ class BlogController extends Controller
             }
         }
 
-
         $getdata['preparation']=$blog_article->preparation;
         $getdata['total_time']=$blog_article->total_time;
         $getdata['recipe_by']=$blog_article->recipe_by;
@@ -793,14 +787,10 @@ class BlogController extends Controller
         $getdata['usage']=$blog_article->usage;
         $getdata['filters']=$data_array;
 
-
-
-
-
         $metafield_data = [
             "metafield" =>
                 [
-                    "key" => 'receipe_details_blog',
+                    "key" => 'receipe_details',
                     "value" => json_encode($getdata),
                     "type" => "json_string",
                     "namespace" => "Marionmaakt",
@@ -811,9 +801,12 @@ class BlogController extends Controller
         $article_metafield = $client->post('/articles/' . $blog_article->shopify_id . '/metafields.json', $metafield_data);
 
         $article_metafield = $article_metafield->getDecodedBody();
-
+        // dd($article_metafield);
         if (isset($article_metafield) && !isset($article_metafield['errors'])) {
-
+            return response()->json([
+                'success' => true,
+                'message' => 'Data saved in artical metafield successfully'
+            ]);
         }
     }
 
@@ -904,8 +897,6 @@ class BlogController extends Controller
             $getdata['usage']=$blog_article->usage;
 
             return response()->json($getdata);
-
         }
-
     }
 }

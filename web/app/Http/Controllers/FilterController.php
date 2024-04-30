@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\Filter;
 use App\Models\FilterValue;
+use App\Models\Session;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -194,9 +195,14 @@ class FilterController extends Controller
             $filter->status = $request->status;
             $filter->save();
 
-            $this->updateMetafield($shop);
-            // $this->CreateUpdateMetafield($shop);
+            if ($request->values) {
+                $values = explode(',', $request->values);
+                foreach ($values as $value) {
+                    $filter->filterValues()->create(['value' => $value]);
+                }
+            }
             
+            $this->CreateUpdateMetafield($shop);
 
             return response()->json([
                 'success' => true,
@@ -242,50 +248,6 @@ class FilterController extends Controller
         }
     }
 
-    public function updateMetafield($session){
-        $client = new Rest($session->shop, $session->access_token);
-        $filters = Filter::with('FilterValues')->where('status',1)->get();
-        
-        $data_array = [];
-        foreach ($filters as $filter) {
-
-            $value_array=[];
-            if(count($filter->FilterValues) > 0){
-                foreach ($filter->FilterValues as $filter_value) {
-                    array_push($value_array, $filter_value->value);
-                }
-            }
-            $data['label'] = $filter->label;
-            $data['value'] = $value_array;
-
-            array_push($data_array, $data);
-            // dd($session);
-        }
-
-        if($session->metafield_id == null) {
-            $shop_metafield = $client->post('/metafields.json', [
-                "metafield" => [
-                    "key" => "filters",
-                    "value" => json_encode($data_array),
-                    "type" => "json_string",
-                    "namespace" => "Marionmaakt"
-                ]
-            ]);
-        }else {
-            $shop_metafield = $client->put('/metafields/' . $session->metafield_id . '.json', [
-                "metafield" => [
-                    "value" => json_encode($data_array)
-                ]
-            ]);
-        }
-        $response = $shop_metafield->getDecodedBody();
-        if (isset($response) && !isset($response['errors'])) {
-            $session->metafield_id = $response['metafield']['id'];
-            $session->save();
-            // dd($session);
-        }
-    }
-
     public function CreateUpdateMetafield($session)
     {
         $client = new Rest($session->shop, $session->access_token);
@@ -303,58 +265,61 @@ class FilterController extends Controller
                 }
             }
             $data['label']=$filter->label;
+            $data['status']=$filter->status;
             $data['value']=$value_array;
 
             array_push($data_array,$data);
             // dd($data_array);
         }
-        if ($session->metafield_id == null){
-            $shop_metafield = $client->post('/metafields.json',[
-                "metafield" => array(
-                    "key" => "filtersNew",
-                    "value" => json_encode($data_array),
-                    "type" => "json_string",
-                    "namespace" => "Marionmaakt",
-                )
-            ]);
-        }else {
-            $shop_metafield = $client->put('/metafields/'.$session->metafield_id. '.json',[
-                "metafield" => [
-                    "value" => json_encode($data_array),
-                ]
-            ]);
-        }
+        
+        $shop_metafield = $client->post('/metafields.json',[
+            "metafield" => array(
+                "key" => "filtersNew",
+                "value" => json_encode($data_array),
+                "type" => "json_string",
+                "namespace" => "Marionmaakt",
+            )
+        ]);
+        
         $response = $shop_metafield->getDecodedBody();
         if(isset($response) && !isset($response['errors'])){
             $session->metafield_id = $response['metafield']['id'];
             $session->save();
         }
+    }
 
-        if ($session->metafield_id == null) {
-            $shop_metafield = $client->post('/metafields.json', [
-                "metafield" => array(
-                    "key" => "filters",
-                    "value" => json_encode($data_array),
-                    "type" => "json_string",
-                    "namespace" => "Marionmaakt"
-                )
+    public function delFilterMetafield(Request $request){
+        $session = Session::first();
+        $client = new Rest($session->shop, $session->access_token);
+
+        $filter_id = $request->input('filter_id');
+        if (!$filter_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Valid Filter id is required'
             ]);
+        }
 
+        $metafield_id = $request->input('metafield_id');
+        if (!$metafield_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Valid metafield id is required'
+            ]);
+        }
+    
+        $result = $client->delete("/metafields/{$metafield_id}.json", ['filter_ids' => $filter_id]);
+
+        if ($result->getStatusCode() == 200) {
+            return response()->json([
+                'status' => true,
+                'message' => 'Metafield deleted successfully'
+            ]);
         } else {
-            $shop_metafield = $client->put('/metafields/' . $session->metafield_id . '.json', [
-                "metafield" => [
-                    "value" => json_encode($data_array)
-                ]
+            return response()->json([
+                'status' => false,
+                'message' => 'Record doesnot exist'
             ]);
-
         }
-
-        $response = $shop_metafield->getDecodedBody();
-        if (isset($response) && !isset($response['errors'])) {
-            $session->metafield_id = $response['metafield']['id'];
-            $session->save();
-        }
-
-
     }
 }
