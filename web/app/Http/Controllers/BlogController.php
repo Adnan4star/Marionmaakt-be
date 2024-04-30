@@ -77,7 +77,7 @@ class BlogController extends Controller
             $blog_ids = [];
         }
         $blogs = $response->getDecodedBody()['blogs'];
-        // dd($blogs);
+        dd($response);
         foreach ($blogs as $blog) {
             if ($blog['id'] == 82187550810) {
                 array_push($blog_ids, $blog['id']);
@@ -796,7 +796,7 @@ class BlogController extends Controller
                     "namespace" => "Marionmaakt",
 
                 ]
-        ];
+        ]; 
 
         $article_metafield = $client->post('/articles/' . $blog_article->shopify_id . '/metafields.json', $metafield_data);
 
@@ -840,6 +840,41 @@ class BlogController extends Controller
         }
 
         return response()->json($data);
+    }
+
+    public function delBlogMetafields(Request $request){
+
+        $session = Session::first();
+        $client = new Rest($session->shop, $session->access_token);
+
+        $article_id = $request->input('blog_id');
+        if(!$article_id){
+            return response()->json([
+                'success' => false,
+                'message' => 'Blog id is required parameter'
+            ]);
+        }
+        $metafield_id = $request->input('metafield_id');
+        if(!$metafield_id){
+            return response()->json([
+                'success' => false,
+                'message' => 'Metafield id is required parameter'
+            ]);
+        }
+
+        $result = $client->delete("/metafields/{$metafield_id}.json", ['article_ids' => $article_id]);
+
+        if($result->getStatusCode() == 200) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Metafield is deleted successfully'
+            ]);
+        } else{
+            return response()->json([
+                'success' => false,
+                'message' => 'No record found'
+            ]);
+        }
     }
     
     public function EditBlog(Request $request){

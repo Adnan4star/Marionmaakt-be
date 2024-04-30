@@ -32,6 +32,7 @@ Route::post('save-blog',[\App\Http\Controllers\BlogController::class,'SaveBlog']
 Route::post('save-receipe',[\App\Http\Controllers\BlogController::class,'saveReceipe']); //myPractice
 Route::post('update-blog',[\App\Http\Controllers\BlogController::class,'UpdateBlog']);
 Route::delete('delete-blog',[\App\Http\Controllers\BlogController::class,'DeleteBlog']);
+Route::delete('delete-blog-metafield',[\App\Http\Controllers\BlogController::class,'delBlogMetafields']);
 
 //product
 Route::get('products',[\App\Http\Controllers\ProductController::class,'ProductsSync']); //myPractice

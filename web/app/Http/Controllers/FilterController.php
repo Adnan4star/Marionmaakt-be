@@ -309,7 +309,7 @@ class FilterController extends Controller
         }
     
         $result = $client->delete("/metafields/{$metafield_id}.json", ['filter_ids' => $filter_id]);
-
+        // dd($result);
         if ($result->getStatusCode() == 200) {
             return response()->json([
                 'status' => true,
@@ -318,7 +318,7 @@ class FilterController extends Controller
         } else {
             return response()->json([
                 'status' => false,
-                'message' => 'Record doesnot exist'
+                'message' => 'Record doesnot exist '
             ]);
         }
     }
